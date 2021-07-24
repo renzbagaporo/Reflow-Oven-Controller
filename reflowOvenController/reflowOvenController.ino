@@ -285,8 +285,6 @@ void loop()
       reflowState = REFLOW_STATE_ERROR;
       reflowStatus = REFLOW_STATUS_OFF;
     }
-
-    Serial.print("Hello!\n");
   }
 
   if (millis() > nextCheck)
