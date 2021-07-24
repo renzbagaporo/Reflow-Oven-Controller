@@ -93,9 +93,9 @@
 *******************************************************************************/
 // Comment either one the following #define to select your board revision
 // Newer board version starts from v1.60 using MAX31855KASA+ chip 
-#define  USE_MAX31855
+//#define  USE_MAX31855
 // Older board version below version v1.60 using MAX6675ISA+ chip
-//#define USE_MAX6675
+#define USE_MAX6675
 
 // ***** INCLUDES *****
 #include <LiquidCrystal.h>
@@ -141,9 +141,9 @@ typedef enum DEBOUNCE_STATE
 
 // ***** CONSTANTS *****
 #define TEMPERATURE_ROOM 50
-#define TEMPERATURE_SOAK_MIN 150
-#define TEMPERATURE_SOAK_MAX 200
-#define TEMPERATURE_REFLOW_MAX 250
+#define TEMPERATURE_SOAK_MIN 100
+#define TEMPERATURE_SOAK_MAX 150
+#define TEMPERATURE_REFLOW_MAX 235
 #define TEMPERATURE_COOL_MIN 100
 #define SENSOR_SAMPLING_TIME 1000
 #define SOAK_TEMPERATURE_STEP 5
@@ -177,42 +177,14 @@ const char* lcdMessagesReflowStatus[] = {
   "Error"
 };
 
-// ***** DEGREE SYMBOL FOR LCD *****
-unsigned char degree[8]  = {
-  140,146,146,140,128,128,128,128};
-
-// ***** PIN ASSIGNMENT *****
-#ifdef	USE_MAX31855
-	int ssrPin = 5;
-	int thermocoupleSOPin = A3;
-	int thermocoupleCSPin = A2;
-	int thermocoupleCLKPin = A1;
-	int lcdRsPin = 7;
-	int lcdEPin = 8;
-	int lcdD4Pin = 9;
-	int lcdD5Pin = 10;
-	int lcdD6Pin = 11;
-	int lcdD7Pin = 12;
-	int ledRedPin = 4;
-	int buzzerPin = 6;
-	int switchPin = A0;
-#else
-	int ssrPin = 5;
-	int thermocoupleSOPin = A5;
-	int thermocoupleCSPin = A4;
-	int thermocoupleCLKPin = A3;
-	int lcdRsPin = 7;
-	int lcdEPin = 8;
-	int lcdD4Pin = 9;
-	int lcdD5Pin = 10;
-	int lcdD6Pin = 11;
-	int lcdD7Pin = 12;
-	int ledRedPin = A1;
-	int ledGreenPin = A0;
-	int buzzerPin = 6;
-	int switch1Pin = 2;
-	int switch2Pin = 3;
-#endif
+int ssrPin1 = 16;
+int ssrPin2 = 4;
+int thermocoupleSOPin = 33;
+int thermocoupleCSPin = 25;
+int thermocoupleCLKPin = 26;
+int buzzerPin = 17;
+int ledRedPin = 18;
+int switch1Pin = 0;
 
 // ***** PID CONTROL VARIABLES *****
 double setpoint;
@@ -242,8 +214,6 @@ int timerSeconds;
 
 // Specify PID control interface
 PID reflowOvenPID(&input, &output, &setpoint, kp, ki, kd, DIRECT);
-// Specify LCD interface
-LiquidCrystal lcd(lcdRsPin, lcdEPin, lcdD4Pin, lcdD5Pin, lcdD6Pin, lcdD7Pin);
 // Specify MAX6675 thermocouple interface
 #ifdef	USE_MAX31855
 	MAX31855 thermocouple(thermocoupleSOPin, thermocoupleCSPin, 
@@ -256,8 +226,10 @@ LiquidCrystal lcd(lcdRsPin, lcdEPin, lcdD4Pin, lcdD5Pin, lcdD6Pin, lcdD7Pin);
 void setup()
 {
   // SSR pin initialization to ensure reflow oven is off
-  digitalWrite(ssrPin, LOW);
-  pinMode(ssrPin, OUTPUT);
+  digitalWrite(ssrPin1, LOW);
+  digitalWrite(ssrPin2, LOW);
+  pinMode(ssrPin1, OUTPUT);
+  pinMode(ssrPin2, OUTPUT);
 
   // Buzzer pin initialization to ensure annoying buzzer is off
   digitalWrite(buzzerPin, LOW);
@@ -267,34 +239,15 @@ void setup()
   digitalWrite(ledRedPin, LOW);
   pinMode(ledRedPin, OUTPUT);
 	#ifdef USE_MAX6675
-    // LED pins initialization and turn on upon start-up (active low)
-    digitalWrite(ledGreenPin, LOW);	
-		pinMode(ledGreenPin, OUTPUT);
 		// Switch pins initialization
 		pinMode(switch1Pin, INPUT);
-		pinMode(switch2Pin, INPUT);
 	#endif	
-
-  // Start-up splash
-  digitalWrite(buzzerPin, HIGH);
-  lcd.begin(8, 2);
-  lcd.createChar(0, degree);
-  lcd.clear();
-  lcd.print("Reflow");
-  lcd.setCursor(0, 1);
-  lcd.print("Oven 1.2");
-  digitalWrite(buzzerPin, LOW);
-  delay(2500);
-  lcd.clear();
 
   // Serial communication at 57600 bps
   Serial.begin(57600);
 
   // Turn off LED (active low)
   digitalWrite(ledRedPin, HIGH);
-	#ifdef  USE_MAX6675
-		digitalWrite(ledGreenPin, HIGH);
-	#endif
   // Set window size
   windowSize = 2000;
   // Initialize time keeping variable
@@ -332,6 +285,8 @@ void loop()
       reflowState = REFLOW_STATE_ERROR;
       reflowStatus = REFLOW_STATUS_OFF;
     }
+
+    Serial.print("Hello!\n");
   }
 
   if (millis() > nextCheck)
@@ -360,33 +315,6 @@ void loop()
       digitalWrite(ledRedPin, HIGH);
     }
 
-    // Clear LCD
-    lcd.clear();
-    // Print current system state
-    lcd.print(lcdMessagesReflowStatus[reflowState]);
-    // Move the cursor to the 2 line
-    lcd.setCursor(0, 1);
-
-    // If currently in error state
-    if (reflowState == REFLOW_STATE_ERROR)
-    {
-      // No thermocouple wire connected
-      lcd.print("TC Error!");
-    }
-    else
-    {
-      // Print current temperature
-      lcd.print(input);
-
-			#if ARDUINO >= 100
-				// Print degree Celsius symbol
-				lcd.write((uint8_t)0);
-			#else
-				// Print degree Celsius symbol
-				lcd.print(0, BYTE);
-			#endif
-      lcd.print("C ");
-    }
   }
 
   // Reflow oven controller state machine
@@ -478,9 +406,6 @@ void loop()
       // Retrieve current time for buzzer usage
       buzzerPeriod = millis() + 1000;
       // Turn on buzzer and green LED to indicate completion
-			#ifdef	USE_MAX6675
-				digitalWrite(ledGreenPin, LOW);
-      #endif
 			digitalWrite(buzzerPin, HIGH);
       // Turn off reflow process
       reflowStatus = REFLOW_STATUS_OFF;                
@@ -494,9 +419,6 @@ void loop()
     {
       // Turn off buzzer and green LED
       digitalWrite(buzzerPin, LOW);
-			#ifdef	USE_MAX6675
-				digitalWrite(ledGreenPin, HIGH);
-			#endif
 			// Reflow process ended
       reflowState = REFLOW_STATE_IDLE; 
     }
@@ -616,12 +538,19 @@ void loop()
       // Time to shift the Relay Window
       windowStartTime += windowSize;
     }
-    if(output > (now - windowStartTime)) digitalWrite(ssrPin, HIGH);
-    else digitalWrite(ssrPin, LOW);   
+    if(output > (now - windowStartTime)) {
+      digitalWrite(ssrPin1, HIGH);
+      digitalWrite(ssrPin2, HIGH);
+    } 
+    else {
+      digitalWrite(ssrPin1, LOW);   
+      digitalWrite(ssrPin2, LOW);   
+    }
   }
   // Reflow oven process is off, ensure oven is off
   else 
   {
-    digitalWrite(ssrPin, LOW);
+    digitalWrite(ssrPin1, LOW);
+    digitalWrite(ssrPin2, LOW);
   }
 }
