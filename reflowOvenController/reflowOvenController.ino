@@ -243,8 +243,8 @@ void setup()
 		pinMode(switch1Pin, INPUT);
 	#endif	
 
-  // Serial communication at 57600 bps
-  Serial.begin(57600);
+  // Serial communication at 115200 bps
+  Serial.begin(115200);
 
   // Turn off LED (active low)
   digitalWrite(ledRedPin, HIGH);
@@ -388,6 +388,9 @@ void loop()
     // Crude method that works like a charm and safe for the components
     if (input >= (TEMPERATURE_REFLOW_MAX - 5))
     {
+      buzzerPeriod = millis() + 1000;
+			digitalWrite(buzzerPin, HIGH);
+
       // Set PID parameters for cooling ramp
       reflowOvenPID.SetTunings(PID_KP_REFLOW, PID_KI_REFLOW, PID_KD_REFLOW);
       // Ramp down to minimum cooling temperature
@@ -398,6 +401,12 @@ void loop()
     break;   
 
   case REFLOW_STATE_COOL:
+    if (millis() > buzzerPeriod)
+    {
+      // Turn off buzzer and green LED
+      digitalWrite(buzzerPin, LOW);
+    }
+
     // If minimum cool temperature is achieve       
     if (input <= TEMPERATURE_COOL_MIN)
     {
@@ -465,64 +474,78 @@ void loop()
     }
   } 
 
-  // Simple switch debounce state machine (for switch #1 (both analog & digital
-	// switch supported))
-  switch (debounceState)
-  {
-  case DEBOUNCE_STATE_IDLE:
-    // No valid switch press
-    switchStatus = SWITCH_NONE;
-    // If switch #1 is pressed
-		#ifdef	USE_MAX6675
-			if (digitalRead(switch1Pin) == LOW)
-		#else
-			if (analogRead(switchPin) == 0)
-		#endif
-			{
-				// Intialize debounce counter
-				lastDebounceTime = millis();
-				// Proceed to check validity of button press
-				debounceState = DEBOUNCE_STATE_CHECK;
-			}	
-    break;
 
-  case DEBOUNCE_STATE_CHECK:
-		#ifdef	USE_MAX6675
-			// If switch #1 is still pressed
-			if (digitalRead(switch1Pin) == LOW)
-		#else
-			if (analogRead(switchPin) == 0)
-		#endif
-			{
-				// If minimum debounce period is completed
-				if ((millis() - lastDebounceTime) > DEBOUNCE_PERIOD_MIN)
-				{
-					// Proceed to wait for button release
-					debounceState = DEBOUNCE_STATE_RELEASE;
-				}
-			}
-			// False trigger
-			else
-			{
-				// Reinitialize button debounce state machine
-				debounceState = DEBOUNCE_STATE_IDLE; 
-			}
-    break;
-
-  case DEBOUNCE_STATE_RELEASE:
-		#ifdef	USE_MAX6675	
-			if (digitalRead(switch1Pin) == HIGH)
-    #else
-			if (analogRead(switchPin) > 0)
-		#endif
-		{
-      // Valid switch 1 press
-      switchStatus = SWITCH_1;
-      // Reinitialize button debounce state machine
-      debounceState = DEBOUNCE_STATE_IDLE; 
+  if (debounceState == DEBOUNCE_STATE_IDLE) {
+    if (Serial.available()) {
+      char c = Serial.read();
+      if (c == 'g') {
+        switchStatus = SWITCH_1;
+        debounceState = DEBOUNCE_STATE_RELEASE;
+      }
     }
-    break;
+  } else {
+    switchStatus = SWITCH_NONE;
+    debounceState = DEBOUNCE_STATE_IDLE;
   }
+
+  // // Simple switch debounce state machine (for switch #1 (both analog & digital
+	// // switch supported))
+  // switch (debounceState)
+  // {
+  // case DEBOUNCE_STATE_IDLE:
+  //   // No valid switch press
+  //   switchStatus = SWITCH_NONE;
+  //   // If switch #1 is pressed
+	// 	#ifdef	USE_MAX6675
+	// 		if (digitalRead(switch1Pin) == LOW)
+	// 	#else
+	// 		if (analogRead(switchPin) == 0)
+	// 	#endif
+	// 		{
+	// 			// Intialize debounce counter
+	// 			lastDebounceTime = millis();
+	// 			// Proceed to check validity of button press
+	// 			debounceState = DEBOUNCE_STATE_CHECK;
+	// 		}	
+  //   break;
+
+  // case DEBOUNCE_STATE_CHECK:
+	// 	#ifdef	USE_MAX6675
+	// 		// If switch #1 is still pressed
+	// 		if (digitalRead(switch1Pin) == LOW)
+	// 	#else
+	// 		if (analogRead(switchPin) == 0)
+	// 	#endif
+	// 		{
+	// 			// If minimum debounce period is completed
+	// 			if ((millis() - lastDebounceTime) > DEBOUNCE_PERIOD_MIN)
+	// 			{
+	// 				// Proceed to wait for button release
+	// 				debounceState = DEBOUNCE_STATE_RELEASE;
+	// 			}
+	// 		}
+	// 		// False trigger
+	// 		else
+	// 		{
+	// 			// Reinitialize button debounce state machine
+	// 			debounceState = DEBOUNCE_STATE_IDLE; 
+	// 		}
+  //   break;
+
+  // case DEBOUNCE_STATE_RELEASE:
+	// 	#ifdef	USE_MAX6675	
+	// 		if (digitalRead(switch1Pin) == HIGH)
+  //   #else
+	// 		if (analogRead(switchPin) > 0)
+	// 	#endif
+	// 	{
+  //     // Valid switch 1 press
+  //     switchStatus = SWITCH_1;
+  //     // Reinitialize button debounce state machine
+  //     debounceState = DEBOUNCE_STATE_IDLE; 
+  //   }
+  //   break;
+  // }
 
   // PID computation and SSR control
   if (reflowStatus == REFLOW_STATUS_ON)
