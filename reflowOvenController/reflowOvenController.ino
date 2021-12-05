@@ -140,10 +140,12 @@ typedef enum DEBOUNCE_STATE
 } debounceState_t;
 
 // ***** CONSTANTS *****
+
+int TEMPERATURE_SOAK_MIN = 0;
+int TEMPERATURE_SOAK_MAX = 0;
+int TEMPERATURE_REFLOW_MAX = 0;
+
 #define TEMPERATURE_ROOM 50
-#define TEMPERATURE_SOAK_MIN 100
-#define TEMPERATURE_SOAK_MAX 150
-#define TEMPERATURE_REFLOW_MAX 235
 #define TEMPERATURE_COOL_MIN 100
 #define SENSOR_SAMPLING_TIME 1000
 #define SOAK_TEMPERATURE_STEP 5
@@ -476,9 +478,21 @@ void loop()
 
 
   if (debounceState == DEBOUNCE_STATE_IDLE) {
-    if (Serial.available()) {
+    if (Serial.available() >= 2) {
       char c = Serial.read();
       if (c == 'g') {
+        c = Serial.read();
+
+        if (c == 'l') {
+          TEMPERATURE_SOAK_MIN = 90;
+          TEMPERATURE_SOAK_MAX = 130;
+          TEMPERATURE_REFLOW_MAX = 165;
+        } else {
+          TEMPERATURE_SOAK_MIN = 100;
+          TEMPERATURE_SOAK_MAX = 150;
+          TEMPERATURE_REFLOW_MAX = 235;
+        }
+
         switchStatus = SWITCH_1;
         debounceState = DEBOUNCE_STATE_RELEASE;
       }
